@@ -92,6 +92,26 @@
     html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; scroll-padding-top: 110px; }
     @media (max-width: 1023px) { html { scroll-padding-top: 96px; } }
     body { font-family: "Inter", system-ui, sans-serif; color: #111; background: #fff; overflow-x: hidden; }
+
+    /* ----- Initial preloader ----- */
+    .preloader {
+      position: fixed; inset: 0; z-index: 9999;
+      background: #fff;
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity .55s ease, visibility .55s ease;
+    }
+    .preloader.is-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    .preloader__mark { position: relative; width: 84px; height: 84px; display: flex; align-items: center; justify-content: center; }
+    .preloader__ring { position: absolute; inset: 0; border-radius: 9999px; border: 1.5px solid rgba(17,17,17,0.08); }
+    .preloader__arc  { position: absolute; inset: 0; border-radius: 9999px; border: 1.5px solid transparent; border-top-color: #E91E63; animation: preloader-spin 1.05s cubic-bezier(.6,.2,.4,.8) infinite; }
+    .preloader__g    { font-family: "Cormorant Garamond", serif; font-style: italic; font-size: 34px; line-height: 1; color: #111; }
+    .preloader__label{ position: absolute; bottom: -34px; left: 50%; transform: translateX(-50%); font-size: 9.5px; letter-spacing: 0.32em; text-transform: uppercase; color: #999; white-space: nowrap; }
+    @keyframes preloader-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .preloader__arc { animation: none; border-top-color: rgba(233,30,99,0.6); }
+    }
+    /* lock scroll while preloader is visible */
+    body.is-loading { overflow: hidden; }
     .font-display { font-family: "Cormorant Garamond", serif; font-feature-settings: "liga","dlig","ss01"; }
     .font-mono { font-family: "JetBrains Mono", monospace; }
     ::selection { background: #F8C8DC; color: #111; }
@@ -401,7 +421,41 @@
   </style>
 </head>
 
-<body class="bg-white text-ink">
+<body class="bg-white text-ink is-loading">
+
+  <!-- Initial preloader (auto-dismisses on hero video canplay or after timeout) -->
+  <div id="preloader" class="preloader" role="status" aria-live="polite" aria-label="Loading Gina Ink Therapy">
+    <div class="preloader__mark">
+      <div class="preloader__ring"></div>
+      <div class="preloader__arc"></div>
+      <span class="preloader__g">g</span>
+      <span class="preloader__label">Gina Ink Therapy</span>
+    </div>
+  </div>
+  <script>
+    (function initPreloader(){
+      const el = document.getElementById('preloader');
+      if (!el) return;
+      const start = performance.now();
+      const MIN = 450;   // avoid a flash on fast connections
+      const MAX = 2500;  // never block longer than this
+      let hidden = false;
+      const hide = () => {
+        if (hidden) return;
+        const wait = Math.max(0, MIN - (performance.now() - start));
+        setTimeout(() => {
+          hidden = true;
+          el.classList.add('is-hidden');
+          document.body.classList.remove('is-loading');
+          setTimeout(() => el.remove(), 700);
+        }, wait);
+      };
+      window.__hidePreloader = hide;
+      setTimeout(hide, MAX);
+      if (document.readyState === 'complete') hide();
+      else window.addEventListener('load', hide, { once: true });
+    })();
+  </script>
 
   <!-- Scroll progress bar -->
   <div id="scrollProgress"></div>
@@ -1460,7 +1514,10 @@
       };
       tryPlay();
       v.addEventListener("loadeddata", tryPlay, { once: true });
-      v.addEventListener("canplay", tryPlay, { once: true });
+      v.addEventListener("canplay", () => {
+        tryPlay();
+        if (window.__hidePreloader) window.__hidePreloader();
+      }, { once: true });
       const onGesture = () => { tryPlay(); cleanup(); };
       const cleanup = () => {
         ["touchstart","touchend","click","scroll","keydown"].forEach(e =>
