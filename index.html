@@ -429,7 +429,7 @@
       <div class="preloader__ring"></div>
       <div class="preloader__arc"></div>
       <span class="preloader__g">g</span>
-      <span class="preloader__label">Gina Ink Therapy</span>
+      <span class="preloader__label"><span class="preloader__pct">0%</span> · Gina Ink Therapy</span>
     </div>
   </div>
   <script>
@@ -437,8 +437,8 @@
       const el = document.getElementById('preloader');
       if (!el) return;
       const start = performance.now();
-      const MIN = 450;   // avoid a flash on fast connections
-      const MAX = 2500;  // never block longer than this
+      const MIN = 450;    // avoid a flash on fast connections
+      const MAX = 12000;  // hard cap so slow networks aren't trapped forever
       let hidden = false;
       const hide = () => {
         if (hidden) return;
@@ -451,9 +451,43 @@
         }, wait);
       };
       window.__hidePreloader = hide;
-      setTimeout(hide, MAX);
-      if (document.readyState === 'complete') hide();
-      else window.addEventListener('load', hide, { once: true });
+      setTimeout(hide, MAX); // safety net
+
+      const waitForMedia = () => {
+        const imgs = Array.from(document.images || []);
+        const vids = Array.from(document.querySelectorAll('video'));
+        const total = imgs.length + vids.length;
+        if (total === 0) { hide(); return; }
+
+        let done = 0;
+        const pct = el.querySelector('.preloader__pct');
+        const tick = () => {
+          done++;
+          if (pct) pct.textContent = Math.round((done / total) * 100) + '%';
+          if (done >= total) hide();
+        };
+
+        imgs.forEach(img => {
+          if (img.loading === 'lazy') img.loading = 'eager';
+          if (img.complete && img.naturalWidth > 0) { tick(); return; }
+          img.addEventListener('load',  tick, { once: true });
+          img.addEventListener('error', tick, { once: true });
+        });
+
+        vids.forEach(v => {
+          if (v.preload !== 'auto') v.preload = 'auto';
+          if (v.readyState >= 2) { tick(); return; } // HAVE_CURRENT_DATA — first frame
+          v.addEventListener('loadeddata', tick, { once: true });
+          v.addEventListener('error',      tick, { once: true });
+          try { v.load(); } catch (_) {}
+        });
+      };
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', waitForMedia, { once: true });
+      } else {
+        waitForMedia();
+      }
     })();
   </script>
 
@@ -1513,10 +1547,7 @@
       };
       tryPlay();
       v.addEventListener("loadeddata", tryPlay, { once: true });
-      v.addEventListener("canplay", () => {
-        tryPlay();
-        if (window.__hidePreloader) window.__hidePreloader();
-      }, { once: true });
+      v.addEventListener("canplay", tryPlay, { once: true });
       const onGesture = () => { tryPlay(); cleanup(); };
       const cleanup = () => {
         ["touchstart","touchend","click","scroll","keydown"].forEach(e =>
