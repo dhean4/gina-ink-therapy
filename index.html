@@ -112,6 +112,12 @@
     }
     /* lock scroll while preloader is visible */
     body.is-loading { overflow: hidden; }
+
+    /* Hide iOS Safari + Android "tap to play" overlay so autoplay videos look clean */
+    video::-webkit-media-controls-start-playback-button { display: none !important; -webkit-appearance: none; }
+    video::-webkit-media-controls-overlay-play-button   { display: none !important; -webkit-appearance: none; }
+    video::-webkit-media-controls-panel                 { display: none !important; }
+    video::-internal-media-controls-overlay-cast-button { display: none !important; }
     .font-display { font-family: "Cormorant Garamond", serif; font-feature-settings: "liga","dlig","ss01"; }
     .font-mono { font-family: "JetBrains Mono", monospace; }
     ::selection { background: #F8C8DC; color: #111; }
@@ -1559,6 +1565,18 @@
 
       // Replay if the tab becomes visible again
       document.addEventListener("visibilitychange", () => { if (!document.hidden) playAll(); });
+
+      // Hero is above the fold — keep retrying for several seconds since
+      // the user has no reason to scroll/tap to unlock playback.
+      const hero = document.getElementById("heroVideo");
+      if (hero) {
+        let attempts = 0;
+        const heroInterval = setInterval(() => {
+          attempts++;
+          if (!hero.paused || attempts > 30) { clearInterval(heroInterval); return; }
+          tryPlay(hero);
+        }, 200);
+      }
 
       // Kick below-the-fold videos when they enter the viewport
       if ("IntersectionObserver" in window) {
