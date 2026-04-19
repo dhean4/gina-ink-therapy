@@ -594,10 +594,13 @@
               loop
               muted
               playsinline
-              preload="metadata"
+              webkit-playsinline
+              disableremoteplayback
+              preload="auto"
               poster="assets/optimized/about-1.jpg"
               aria-label="Gina at work in the Abule-Egba studio"
               style="filter: contrast(1.04) saturate(0.95);"
+              id="heroVideo"
             ></video>
             <!-- Soft top + bottom overlays for text legibility -->
             <div class="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-black/10 pointer-events-none"></div>
@@ -1444,6 +1447,33 @@
       { threshold: 0.5 }
     );
     counters.forEach((c) => cIo.observe(c));
+
+    /* ---------- Hero video: force autoplay on mobile, retry on first gesture ---------- */
+    (function ensureHeroVideoPlays(){
+      const v = document.getElementById("heroVideo");
+      if (!v) return;
+      v.muted = true;
+      v.playsInline = true;
+      const tryPlay = () => {
+        const p = v.play();
+        if (p && typeof p.catch === "function") p.catch(() => {});
+      };
+      tryPlay();
+      v.addEventListener("loadeddata", tryPlay, { once: true });
+      v.addEventListener("canplay", tryPlay, { once: true });
+      const onGesture = () => { tryPlay(); cleanup(); };
+      const cleanup = () => {
+        ["touchstart","touchend","click","scroll","keydown"].forEach(e =>
+          window.removeEventListener(e, onGesture, { passive: true })
+        );
+      };
+      ["touchstart","touchend","click","scroll","keydown"].forEach(e =>
+        window.addEventListener(e, onGesture, { passive: true })
+      );
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) tryPlay();
+      });
+    })();
 
     /* ---------- Hero image subtle parallax (desktop pointer only) ---------- */
     const heroImg = document.getElementById("heroImg");
