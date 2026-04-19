@@ -883,7 +883,7 @@
           <video
             src="assets/optimized/gallery-first.mp4"
             class="w-full h-full object-cover"
-            autoplay loop muted playsinline preload="auto"
+            autoplay loop muted playsinline webkit-playsinline disableremoteplayback preload="auto"
             aria-label="Studio session — tattoo in progress"
           ></video>
           <figcaption class="caption">
@@ -928,7 +928,7 @@
           <video
             src="assets/optimized/about.mp4"
             class="w-full h-full object-cover"
-            autoplay loop muted playsinline preload="auto"
+            autoplay loop muted playsinline webkit-playsinline disableremoteplayback preload="auto"
             aria-label="Behind-the-scenes in the Abule-Egba studio"
           ></video>
           <figcaption class="caption">
@@ -1533,31 +1533,47 @@
     );
     counters.forEach((c) => cIo.observe(c));
 
-    /* ---------- Hero video: force autoplay on mobile, retry on first gesture ---------- */
-    (function ensureHeroVideoPlays(){
-      const v = document.getElementById("heroVideo");
-      if (!v) return;
-      v.muted = true;
-      v.playsInline = true;
-      const tryPlay = () => {
+    /* ---------- Force autoplay for every <video> on mobile, retry on first gesture + on viewport entry ---------- */
+    (function ensureAllVideosPlay(){
+      const vids = Array.from(document.querySelectorAll("video"));
+      if (!vids.length) return;
+
+      const tryPlay = (v) => {
+        v.muted = true;
+        v.playsInline = true;
         const p = v.play();
         if (p && typeof p.catch === "function") p.catch(() => {});
       };
-      tryPlay();
-      v.addEventListener("loadeddata", tryPlay, { once: true });
-      v.addEventListener("canplay", tryPlay, { once: true });
-      const onGesture = () => { tryPlay(); cleanup(); };
-      const cleanup = () => {
-        ["touchstart","touchend","click","scroll","keydown"].forEach(e =>
-          window.removeEventListener(e, onGesture, { passive: true })
-        );
-      };
-      ["touchstart","touchend","click","scroll","keydown"].forEach(e =>
-        window.addEventListener(e, onGesture, { passive: true })
-      );
-      document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) tryPlay();
+      const playAll = () => vids.forEach(tryPlay);
+
+      vids.forEach(v => {
+        tryPlay(v);
+        v.addEventListener("loadeddata", () => tryPlay(v), { once: true });
+        v.addEventListener("canplay",    () => tryPlay(v), { once: true });
       });
+
+      // First user gesture anywhere unlocks playback on iOS
+      const events = ["touchstart","touchend","click","scroll","keydown"];
+      const onGesture = () => { playAll(); events.forEach(e => window.removeEventListener(e, onGesture)); };
+      events.forEach(e => window.addEventListener(e, onGesture, { passive: true }));
+
+      // Replay if the tab becomes visible again
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) playAll(); });
+
+      // Kick below-the-fold videos when they enter the viewport
+      if ("IntersectionObserver" in window) {
+        const io = new IntersectionObserver((entries) => {
+          entries.forEach(en => {
+            if (en.isIntersecting) {
+              tryPlay(en.target);
+            } else if (en.target.tagName === "VIDEO") {
+              // optional: pause off-screen tiles to save battery on mobile
+              try { en.target.pause(); } catch (_) {}
+            }
+          });
+        }, { threshold: 0.15 });
+        vids.forEach(v => io.observe(v));
+      }
     })();
 
     /* ---------- Hero image subtle parallax (desktop pointer only) ---------- */
